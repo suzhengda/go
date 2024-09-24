@@ -302,6 +302,15 @@ func buildModeInit() {
 			forcedLdflags = append(forcedLdflags, "-linkshared", "-w")
 		}
 	}
+
+	if cfg.BuildTlsmodegd {
+		if gccgo { // todo: gd params
+		} else {
+			forcedAsmflags = append(forcedAsmflags, "-tlsmodegd")
+			forcedGcflags = append(forcedGcflags, "-tlsmodegd")
+		}
+	}
+
 	if codegenArg != "" {
 		if gccgo {
 			forcedGccgoflags = append([]string{codegenArg}, forcedGccgoflags...)

@@ -1121,7 +1121,8 @@ type Link struct {
 	Flag_linkshared    bool
 	Flag_optimize      bool
 	Flag_locationlists bool
-	Flag_noRefName     bool   // do not include referenced symbol names in object file
+	Flag_noRefName     bool // do not include referenced symbol names in object file
+	Flag_tlsmodelgd    bool
 	Retpoline          bool   // emit use of retpoline stubs for indirect jmp/call
 	Flag_maymorestack  string // If not "", call this function before stack checks
 	Bso                *bufio.Writer

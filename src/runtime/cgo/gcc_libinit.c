@@ -13,6 +13,7 @@
 
 #include <pthread.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> // strerror
@@ -144,6 +145,20 @@ void x_cgo_set_context_function(void (*context)(struct context_arg*)) {
 // Gets the context function.
 void (*(_cgo_get_context_function(void)))(struct context_arg*) {
 	return __atomic_load_n(&cgo_context_function, __ATOMIC_CONSUME);
+}
+
+int
+x_cgo_sys_lib_args_valid()
+{
+	// The ELF gABI doesn't require an argc / argv to be passed to the functions
+	// in the DT_INIT_ARRAY. However, glibc always does.
+
+	// Ignore uClibc masquerading as glibc.
+#if defined(__GLIBC__) && !defined(__UCLIBC__)
+	return 1;
+#else
+	return 0;
+#endif
 }
 
 // _cgo_try_pthread_create retries pthread_create if it fails with
