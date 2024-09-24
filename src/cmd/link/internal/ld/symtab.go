@@ -157,7 +157,7 @@ func putelfsym(ctxt *Link, x loader.Sym, typ elf.SymType, curbind elf.SymBind) {
 		// Rewrite · to . for ASCII-only tools like DTrace (sigh)
 		sname = strings.Replace(sname, "·", ".", -1)
 	}
-
+	// TODO: check
 	if ctxt.DynlinkingGo() && bind == elf.STB_GLOBAL && curbind == elf.STB_LOCAL && ldr.SymType(x) == sym.STEXT {
 		// When dynamically linking, we want references to functions defined
 		// in this module to always be to the function object, not to the
@@ -246,7 +246,7 @@ func genelfsym(ctxt *Link, elfbind elf.SymBind) {
 		st := ldr.SymType(s)
 		if st >= sym.SELFRXSECT && st < sym.SXREF {
 			typ := elf.STT_OBJECT
-			if st == sym.STLSBSS {
+			if st == sym.STLSBSS { // TODO: check
 				if ctxt.IsInternal() {
 					continue
 				}
@@ -346,7 +346,7 @@ func asmbPlan9Sym(ctxt *Link) {
 		}
 		t := ldr.SymType(s)
 		if t >= sym.SELFRXSECT && t < sym.SXREF { // data sections handled in dodata
-			if t == sym.STLSBSS {
+			if t == sym.STLSBSS { // TODO: check
 				continue
 			}
 			if !shouldBeInSymbolTable(s) {

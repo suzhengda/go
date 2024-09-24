@@ -163,7 +163,6 @@ func Main(arch *sys.Arch, theArch Arch) {
 	thearch = theArch
 	ctxt := linknew(arch)
 	ctxt.Bso = bufio.NewWriter(os.Stdout)
-
 	// For testing behavior of go command when tools crash silently.
 	// Undocumented, not in standard flag parser to avoid
 	// exposing in usage message.

@@ -1109,7 +1109,7 @@ func (f *xcoffFile) asmaixsym(ctxt *Link) {
 		switch {
 		case st == sym.STLSBSS:
 			if ctxt.IsExternal() {
-				putaixsym(ctxt, s, TLSSym)
+				putaixsym(ctxt, s, TLSSym) // NOTE: debug信息格式有stabs，coff，xcoff，dwarf
 			}
 
 		case st == sym.SBSS, st == sym.SNOPTRBSS, st == sym.SLIBFUZZER_8BIT_COUNTER, st == sym.SCOVERAGE_COUNTER:

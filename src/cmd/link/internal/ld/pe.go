@@ -858,7 +858,7 @@ func (f *peFile) writeSymbols(ctxt *Link) {
 		}
 		t := ldr.SymType(s)
 		if t >= sym.SELFRXSECT && t < sym.SXREF { // data sections handled in dodata
-			if t == sym.STLSBSS {
+			if t == sym.STLSBSS { // TODO: check
 				continue
 			}
 			if !shouldBeInSymbolTable(s) {

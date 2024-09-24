@@ -629,7 +629,7 @@ const (
 	SHT_DYNAMIC        SectionType = 6          /* dynamic section */
 	SHT_NOTE           SectionType = 7          /* note section */
 	SHT_NOBITS         SectionType = 8          /* no space section */
-	SHT_REL            SectionType = 9          /* relocation section - no addends */
+	SHT_REL            SectionType = 9          /* relocation section - no addends */ // note that
 	SHT_SHLIB          SectionType = 10         /* reserved - purpose unknown */
 	SHT_DYNSYM         SectionType = 11         /* dynamic symbol table section */
 	SHT_INIT_ARRAY     SectionType = 14         /* Initialization function pointers. */

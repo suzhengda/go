@@ -262,8 +262,21 @@ func (out *OutBuf) Write32b(v uint32) {
 
 func (out *OutBuf) Write64(v uint64) {
 	out.arch.ByteOrder.PutUint64(out.encbuf[:], v)
+	// if v == 0x406 {
+	// 	fmt.Printf("StackInfo:" + getStackInfo())
+	// }
 	out.Write(out.encbuf[:8])
 }
+
+// func getStackInfo() string {
+// 	// 定义一个字节数组，用于存储调用堆栈信息
+// 	buf := make([]byte, 1024)
+// 	// 调用runtime.Stack方法获取调用堆栈信息
+// 	n := runtime.Stack(buf, false)
+// 	// 格式化调用堆栈信息
+// 	stackInfo := string(buf[:n])
+// 	return stackInfo
+// }
 
 func (out *OutBuf) Write64b(v uint64) {
 	binary.BigEndian.PutUint64(out.encbuf[:], v)

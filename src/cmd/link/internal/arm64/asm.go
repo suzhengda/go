@@ -41,7 +41,7 @@ import (
 	"log"
 )
 
-func gentext(ctxt *ld.Link, ldr *loader.Loader) {
+func gentext(ctxt *ld.Link, ldr *loader.Loader) { // TODO: check
 	initfunc, addmoduledata := ld.PrepareAddmoduledata(ctxt)
 	if initfunc == nil {
 		return
@@ -81,6 +81,7 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 	const pcrel = 1
 	switch r.Type() {
 	default:
+		fmt.Printf("\t\t addDynRel_1 R_AARCH64_TLSDESC default")
 		if r.Type() >= objabi.ElfRelocOffset {
 			ldr.Errorf(s, "unexpected relocation type %d (%s)", r.Type(), sym.RelocName(target.Arch, r.Type()))
 			return false
@@ -142,7 +143,7 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		su.SetRelocAdd(rIdx, r.Add()+int64(ldr.SymGot(targ)))
 		return true
 
-	case objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_ADR_PREL_PG_HI21),
+	case objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_ADR_PREL_PG_HI21), // TODO: check，此处可能是属于归为同一类变量引用，标记需更新相对地址
 		objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_ADD_ABS_LO12_NC):
 		if targType == sym.SDYNIMPORT {
 			ldr.Errorf(s, "unexpected relocation for dynamic symbol %s", ldr.SymName(targ))
@@ -277,6 +278,32 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		su.SetRelocSym(rIdx, syms.GOT)
 		su.SetRelocAdd(rIdx, int64(ldr.SymGot(targ)))
 		return true
+		// case objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_TLSDESC_ADR_PAGE21),
+		// 	objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_TLSDESC_LD64_LO12_NC):
+		// 	fmt.Printf("\t\t addDynRel_1 R_AARCH64_TLSDESC")
+		// 	if targType != sym.SDYNIMPORT {
+		// 		// have symbol
+		// 		// TODO: turn LDR of GOT entry into ADR of symbol itself
+		// 	}
+
+		// 	// fall back to using GOT
+		// 	// TODO: just needs relocation, no need to put in .dynsym
+		// 	ld.AddGotSym(target, ldr, syms, targ, uint32(elf.R_AARCH64_TLSGD_ADR_PAGE21))
+		// 	su := ldr.MakeSymbolUpdater(s)
+		// 	su.SetRelocType(rIdx, objabi.R_ARM64_GOTPCREL)
+		// 	su.SetRelocSym(rIdx, syms.GOT)
+		// 	su.SetRelocAdd(rIdx, r.Add()+int64(ldr.SymGot(targ)))
+		// 	return true
+		// case objabi.ElfRelocOffset + objabi.RelocType(elf.R_AARCH64_TLSGD_ADD_LO12_NC):
+		// 	if targType == sym.SDYNIMPORT {
+		// 		ldr.Errorf(s, "unexpected relocation for dynamic symbol %s", ldr.SymName(targ))
+		// 	}
+		// 	if targType == 0 || targType == sym.SXREF {
+		// 		ldr.Errorf(s, "unknown symbol %s", ldr.SymName(targ))
+		// 	}
+		// 	su := ldr.MakeSymbolUpdater(s)
+		// 	su.SetRelocType(rIdx, objabi.R_ARM64_GOTPCREL)
+		// 	return true
 	}
 
 	// Reread the reloc to incorporate any changes in type above.
@@ -284,7 +311,8 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 	r = relocs.At(rIdx)
 
 	switch r.Type() {
-	case objabi.R_CALLARM64:
+	case objabi.R_ARM64_TLS_GD_CALL, // TODO: check
+		objabi.R_CALLARM64:
 		if targType != sym.SDYNIMPORT {
 			// nothing to do, the relocation will be laid out in reloc
 			return true
@@ -472,10 +500,14 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 		r2.SetSym(syms.GOT)
 		r2.SetAdd(int64(ldr.SymGot(targ)))
 		return true
+	case objabi.R_ARM64_TLS_GD:
+		fmt.Printf("\t\t addDynRel R_ARM64_TLS_GD")
 	}
+	fmt.Printf("\t\t addDynRel_2 R_AARCH64_TLSDESC")
 	return false
 }
 
+// 编译中elf链接层面的符号添加重定向标识，所有真正汇编指令字节码只有在被进行总连接的时候，动态的才替换为真实字节码
 func elfreloc1(ctxt *ld.Link, out *ld.OutBuf, ldr *loader.Loader, s loader.Sym, r loader.ExtReloc, ri int, sectoff int64) bool {
 	out.Write64(uint64(sectoff))
 
@@ -523,16 +555,47 @@ func elfreloc1(ctxt *ld.Link, out *ld.OutBuf, ldr *loader.Loader, s loader.Sym, 
 
 	case objabi.R_ARM64_TLS_LE:
 		out.Write64(uint64(elf.R_AARCH64_TLSLE_MOVW_TPREL_G0) | uint64(elfsym)<<32)
+		/// NOTE: 会自动生成R_AARCH64_TLS_TPREL64或者R_AARCH64_TLSDESC的标识，取决于ADR_PAGE类型，哪里控制的映射，尚未清楚。大约是通过调用外部的lld拿到了对应的类型(llvm项目的lld\ELF\Arch\AArch64.cpp的方法getRelExpr有映射关系)。
 	case objabi.R_ARM64_TLS_IE:
-		out.Write64(uint64(elf.R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21) | uint64(elfsym)<<32)
+		//   adrp    x0, :gottprel:v
+		//   ldr     x0, [x0, :gottprel_lo12:v]
+		out.Write64(uint64(elf.R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21) | uint64(elfsym)<<32)   // 当前指令到符号之间页基地址差值到x0
+		out.Write64(uint64(r.Xadd))                                                         // NOTE: add是符号的修正的+-偏移量，Xadd表示为已修正过的值,并非该变量地址、Xsym是符号本身。
+		out.Write64(uint64(sectoff + 4))                                                    // sectoff 是-(相对于段地址-重定位偏移量-全局符号索引)?
+		out.Write64(uint64(elf.R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC) | uint64(elfsym)<<32) // 根据x0寄存器（全局符号线程指针got页地址）+第二个全局符号表低位12 与符号偏移量，载入x1寄存器，但不复制。
+		// fmt.Printf("R_ARM64_TLS_IE::\t\t %s end \n", uint64(elf.R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21)|uint64(elfsym)<<32)
+		// fmt.Printf("R_ARM64_TLS_IE::\t\t %s end \n", uint64(r.Xadd))
+		// fmt.Printf("R_ARM64_TLS_IE::\t\t %s end \n", uint64(sectoff+4))
+		// fmt.Printf("R_ARM64_TLS_IE::\t\t %s end \n", uint64(elf.R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC)|uint64(elfsym)<<32)
+		// fmt.Printf("R_ARM64_TLS_IE::\t\t %s end \n", "")
+	case objabi.R_ARM64_TLS_GD:
+		// 符号重定向类型：R_AARCH64_TLSDESC  __tls_get_addr是libc开放接口，但此处可经过TLSDESC方式，获取tls ld的信息
+		out.Write64(uint64(elf.R_AARCH64_TLSDESC_ADR_PAGE21) | uint64(elfsym)<<32) // 标识desc， 而非 R_AARCH64_TLSGD_ADR_PAGE21、 R_AARCH64_TLSGD_ADD_LO12_NC
 		out.Write64(uint64(r.Xadd))
 		out.Write64(uint64(sectoff + 4))
-		out.Write64(uint64(elf.R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC) | uint64(elfsym)<<32)
+		out.Write64(uint64(elf.R_AARCH64_TLSDESC_LD64_LO12_NC) | uint64(elfsym)<<32)
+		// out.Write64(uint64(r.Xadd))
+		// out.Write64(uint64(sectoff + 8))
+		// out.Write64(uint64(elf.R_AARCH64_TLSDESC_ADD_LO12_NC) | uint64(elfsym)<<32)
+		// out.Write64(uint64(elf.R_AARCH64_TLSDESC_CALL) | uint64(elfsym)<<32)
+		fmt.Printf("R_ARM64_TLS_GD::\t\t  count %s %s r.Xadd:%s sectoff:%s \n", r.Xsym, uint64(elfsym)<<32, r.Xadd, sectoff+4)
+	case objabi.R_ARM64_TLS_GD_PAGEOFF12:
+		if siz != 4 {
+			return false
+		}
+		out.Write64(uint64(elf.R_AARCH64_TLSDESC_ADD_LO12_NC) | uint64(elfsym)<<32) // 标识desc， 而非 R_AARCH64_TLSGD_ADR_PAGE21、 R_AARCH64_TLSGD_ADD_LO12_NC
+
 	case objabi.R_ARM64_GOTPCREL:
 		out.Write64(uint64(elf.R_AARCH64_ADR_GOT_PAGE) | uint64(elfsym)<<32)
 		out.Write64(uint64(r.Xadd))
 		out.Write64(uint64(sectoff + 4))
 		out.Write64(uint64(elf.R_AARCH64_LD64_GOT_LO12_NC) | uint64(elfsym)<<32)
+	case objabi.R_ARM64_TLS_GD_CALL:
+		if siz != 4 {
+			return false
+		}
+		out.Write64(uint64(elf.R_AARCH64_TLSDESC_CALL) | uint64(elfsym)<<32)
+
 	case objabi.R_CALLARM64:
 		if siz != 4 {
 			return false
@@ -643,6 +706,9 @@ func machoreloc1(arch *sys.Arch, out *ld.OutBuf, ldr *loader.Loader, s loader.Sy
 		}
 		v |= 1 << 24 // pc-relative bit
 		v |= ld.MACHO_ARM64_RELOC_GOT_LOAD_PAGE21 << 28
+	case objabi.R_ARM64_TLS_GD:
+		fmt.Printf("machoreloc1 R_ARM64_TLS_GD::\tn ")
+
 	}
 
 	switch siz {
@@ -741,11 +807,14 @@ func pereloc1(arch *sys.Arch, out *ld.OutBuf, ldr *loader.Loader, s loader.Sym, 
 		out.Write32(uint32(sectoff))
 		out.Write32(uint32(symdynid))
 		out.Write16(ld.IMAGE_REL_ARM64_BRANCH26)
+	case objabi.R_ARM64_TLS_GD:
+		fmt.Printf("pereloc1 for R_ARM64_TLS_GD")
 	}
 
 	return true
 }
 
+// 编译器重定位, 指令字节码的相关变量地址重定位的逻辑
 func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loader.Reloc, s loader.Sym, val int64) (int64, int, bool) {
 	const noExtReloc = 0
 	const isOk = true
@@ -837,6 +906,38 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 		case objabi.R_ARM64_TLS_IE:
 			nExtReloc = 2 // need two ELF relocations. see elfreloc1
 			return val, nExtReloc, isOk
+		case objabi.R_ARM64_TLS_GD_PAGEOFF12:
+			nExtReloc = 1 // 只要一处重定位，需要与elfreloc1里边声明的重定位个数一致
+			return val, nExtReloc, isOk
+		case objabi.R_ARM64_TLS_GD: // c-shared 会走此处
+			// 	// 	// 	fallthrough
+			// 	// 	// case objabi.R_ARM64_TLS_GD_PAGE21:
+			// 	// 	// 	fallthrough
+			// 	// 	// case objabi.R_ARM64_TLS_GD_PAGEOFF12:
+			nExtReloc = 2 // need two ELF relocations. see elfreloc1 // // NOTE: 不可使用该外部extreloc
+			// 	// 	// pc 当前 ldr.SymValue(s) + int64(r.Off())
+			// 	// 	// tgt 目标符号地址 ldr.SymAddr(rs)+r.Add()
+			// 	// 	// SymAddr字符值？
+			// 	// 	// rs, off := ld.FoldSubSymbolOffset(ldr, rs)
+			// 	// 	// xadd := r.Add() + off
+			// 	// 	// target.
+			// 	// 	fmt.Printf("R_ARM64_TLS_GD Reloc::%s %s \t\t\n", r.Reloc.Off(),
+			// 	// 		r.Reloc.Add())
+
+			// 	// 	fmt.Printf("R_ARM64_TLS_GD sect off::\t\t  off: %s ldr.SymAddr(s): %s ldr.SymGot(s): %d \n", ldr.SymSect(rs).Seg.Vaddr, ldr.SymAddr(s), int64(ldr.SymGot(rs)))
+			// 	// 	// fmt.Printf("R_ARM64_TLS_GD off::\t\t  off: %s rs: %s \n", off, rs)
+			// 	// 	// fmt.Printf("R_ARM64_TLS_GD xadd::\t\t  xadd: %s \n", xadd)
+			// 	// 	fmt.Printf("R_ARM64_TLS_GD Vaddr::\t\t  Vaddr: %s \n", ldr.SymValue(rs)+r.Add()+int64(ldr.SymSect(rs).Vaddr))
+
+			// 	// 	fmt.Printf("R_ARM64_TLS_GD extReloc::\t\t   r: %s ldr.SymAddr(rs):%d add: %d ldr.SymValue(s):%d , s %s, r.off %d \n", nil, ldr.SymAddr(rs), r.Add(), ldr.SymValue(s), s, int64(r.Off()))
+			fmt.Printf("R_ARM64_TLS_GD val::\t\t  val: %x \n", val)
+			// if val == 0xDD000321 || val == 0xfd50a001 {
+			// 	val = 0xfd50a001
+			// }
+			// if val == 0xD1000320 || val == 0x9110a000 {
+			// 	val = 0x910fa000
+			// }
+			return val, nExtReloc, isOk
 
 		case objabi.R_ADDR:
 			if target.IsWindows() && r.Add() != 0 {
@@ -912,8 +1013,42 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 		}
 		return val | (v << 5), noExtReloc, true
 
+	case objabi.R_ARM64_TLS_GD: // NOTE: 编译链接时：调整寄存器变量符号重定向
+		fmt.Printf("2 -R_ARM64_TLS_GD val::\t\t  val: %x \n", val)
+		// // The TCB is two pointers. This is not documented anywhere, but is
+		// // de facto part of the ABI.
+		// v := ldr.SymAddr(rs) + int64(2*target.Arch.PtrSize) + r.Add()
+		// if v < 0 || v >= 32678 {
+		// 	ldr.Errorf(s, "TLS offset out of range %d", v)
+		// }
+
+		// var o0, o1 uint32
+		// if target.IsBigEndian() {
+		// 	o0 = uint32(val >> 32)
+		// 	o1 = uint32(val)
+		// } else {
+		// 	o0 = uint32(val)
+		// 	o1 = uint32(val >> 32)
+		// }
+
+		// // R_AARCH64_TLSGD_ADR_PAGE21
+		// // turn ADRP to MOVZ
+		// o0 = 0xd2a00000 | uint32(o0&0x1f) | (uint32((v>>16)&0xffff) << 5)
+		// // R_AARCH64_TLSGD_ADD_LO12_NC
+		// // turn LD64 to MOVK
+		// if v&3 != 0 {
+		// 	ldr.Errorf(s, "invalid address: %x for relocation type: R_AARCH64_TLSGD_ADD_LO12_NC", v)
+		// }
+		// o1 = 0xf2800000 | uint32(o1&0x1f) | (uint32(v&0xffff) << 5)
+
+		// // when laid out, the instruction order must always be o0, o1.
+		// if target.IsBigEndian() {
+		// 	return int64(o0)<<32 | int64(o1), noExtReloc, isOk
+		// }
+		// return int64(o1)<<32 | int64(o0), noExtReloc, isOk
+
 	case objabi.R_ARM64_TLS_IE:
-		if target.IsPIE() && target.IsElf() {
+		if target.IsPIE() && target.IsElf() { // 对 pie模式中的符号重定向的转换，ie会变成le模式。只有设置为pie时才执行，got的tls会变为le模式
 			// We are linking the final executable, so we
 			// can optimize any TLS IE relocation to LE.
 
@@ -921,14 +1056,15 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 				ldr.Errorf(s, "TLS reloc on unsupported OS %v", target.HeadType)
 			}
 
+			// 替换
 			// The TCB is two pointers. This is not documented anywhere, but is
 			// de facto part of the ABI.
-			v := ldr.SymAddr(rs) + int64(2*target.Arch.PtrSize) + r.Add()
+			v := ldr.SymAddr(rs) + int64(2*target.Arch.PtrSize) + r.Add() // SymAddr是新符号地址，Add是相对偏移量？
 			if v < 0 || v >= 32678 {
 				ldr.Errorf(s, "TLS offset out of range %d", v)
 			}
 
-			var o0, o1 uint32
+			var o0, o1 uint32 // o1高位
 			if target.IsBigEndian() {
 				o0 = uint32(val >> 32)
 				o1 = uint32(val)
@@ -939,18 +1075,20 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 
 			// R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21
 			// turn ADRP to MOVZ
-			o0 = 0xd2a00000 | uint32(o0&0x1f) | (uint32((v>>16)&0xffff) << 5)
+			o0 = 0xd2a00000 | uint32(o0&0x1f) | (uint32((v>>16)&0xffff) << 5) // 0xd2a00000 对应 MOVZ 指令的 opcode 和一些其他字段； 16 到第 31 位的内容，然后左移 5 位。这部分构成了 MOVZ 指令中的立即数字段
 			// R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC
 			// turn LD64 to MOVK
-			if v&3 != 0 {
+			if v&3 != 0 { // 第一第二位必须为0，校验是否4的倍数?
 				ldr.Errorf(s, "invalid address: %x for relocation type: R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC", v)
 			}
-			o1 = 0xf2800000 | uint32(o1&0x1f) | (uint32(v&0xffff) << 5)
+			o1 = 0xf2800000 | uint32(o1&0x1f) | (uint32(v&0xffff) << 5) // 0xf2800000 是 MOVK 指令的 opcode 和一些其他字段的组合;提取立即数: (v & 0xffff) 提取变量 v 的低 16 位。左移立即数: (uint32(v & 0xffff) << 5) 将提取出的立即数左移 5 位，以便将其放置在 MOVK 指令的适当位置
 
 			// when laid out, the instruction order must always be o0, o1.
 			if target.IsBigEndian() {
+				fmt.Printf("\t\t archreloc %s  %s \n", int64(o0)<<32|int64(o1), ldr.SymName(rs))
 				return int64(o0)<<32 | int64(o1), noExtReloc, isOk
 			}
+			fmt.Printf("\t\t archreloc %s  %s \n", int64(o1)<<32|int64(o0), ldr.SymName(rs))
 			return int64(o1)<<32 | int64(o0), noExtReloc, isOk
 		} else {
 			log.Fatalf("cannot handle R_ARM64_TLS_IE (sym %s) when linking internally", ldr.SymName(s))
@@ -972,7 +1110,7 @@ func archreloc(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, r loade
 		if (val>>24)&0x9f == 0x90 {
 			// R_AARCH64_ADR_GOT_PAGE
 			// patch instruction: adrp
-			t := ldr.SymAddr(rs) + r.Add() - ((ldr.SymValue(s) + int64(r.Off())) &^ 0xfff)
+			t := ldr.SymAddr(rs) + r.Add() - ((ldr.SymValue(s) + int64(r.Off())) &^ 0xfff) // rel
 			if t >= 1<<32 || t < -1<<32 {
 				ldr.Errorf(s, "program too large, address relocation distance = %d", t)
 			}
@@ -1080,12 +1218,17 @@ func extreloc(target *ld.Target, ldr *loader.Loader, r loader.Reloc, s loader.Sy
 		objabi.R_ARM64_PCREL_LDST16,
 		objabi.R_ARM64_PCREL_LDST32,
 		objabi.R_ARM64_PCREL_LDST64,
+		// objabi.R_ARM64_TLS_GD, // NODE: 不可使用ExtrelocSimple
 		objabi.R_ADDRARM64:
+
 		rr := ld.ExtrelocViaOuterSym(ldr, r, s)
 		return rr, true
 	case objabi.R_CALLARM64,
 		objabi.R_ARM64_TLS_LE,
+		objabi.R_ARM64_TLS_GD,
+		objabi.R_ARM64_TLS_GD_PAGEOFF12,
 		objabi.R_ARM64_TLS_IE:
+
 		return ld.ExtrelocSimple(ldr, r), true
 	}
 	return loader.ExtReloc{}, false
@@ -1324,6 +1467,7 @@ func trampoline(ctxt *ld.Link, ldr *loader.Loader, ri int, rs, s loader.Sym) {
 		// The PLT may be too far. Insert a trampoline for them.
 		fallthrough
 	case objabi.R_CALLARM64:
+	case objabi.R_ARM64_TLS_GD_CALL:
 		var t int64
 		// ldr.SymValue(rs) == 0 indicates a cross-package jump to a function that is not yet
 		// laid out. Conservatively use a trampoline. This should be rare, as we lay out packages

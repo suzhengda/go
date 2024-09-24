@@ -267,8 +267,8 @@ func FPCVTI(sf uint32, s uint32, type_ uint32, rmode uint32, op uint32) uint32 {
 	return sf<<31 | s<<29 | 0x1E<<24 | type_<<22 | 1<<21 | rmode<<19 | op<<16 | 0<<10
 }
 
-func ADR(p uint32, o uint32, rt uint32) uint32 {
-	return p<<31 | (o&3)<<29 | 0x10<<24 | ((o>>2)&0x7FFFF)<<5 | rt&31
+func ADR(p uint32, o int64, rt uint32) uint32 {
+	return p<<31 | uint32((o&3)<<29) | 0x10<<24 | uint32(((o>>2)&0x7FFFF)<<5) | rt&31
 }
 
 func OPBIT(x uint32) uint32 {
@@ -334,6 +334,7 @@ var optab = []Optab{
 	{AADD, C_EXTREG, C_NONE, C_NONE, C_RSP, C_NONE, 27, 4, 0, 0, 0},
 	{ACMP, C_EXTREG, C_RSP, C_NONE, C_NONE, C_NONE, 27, 4, 0, 0, 0},
 	{AADD, C_ZREG, C_ZREG, C_NONE, C_ZREG, C_NONE, 1, 4, 0, 0, 0},
+	{AADD, C_TLS_GD, C_NONE, C_NONE, C_ZREG, C_NONE, 110, 4, 0, 0, 0}, // C_TLS_GD的符号地址 // C_TLS_GD  // C_VCONADDR
 	{AADD, C_ZREG, C_NONE, C_NONE, C_ZREG, C_NONE, 1, 4, 0, 0, 0},
 	{AMUL, C_ZREG, C_ZREG, C_NONE, C_ZREG, C_NONE, 15, 4, 0, 0, 0},
 	{AMUL, C_ZREG, C_NONE, C_NONE, C_ZREG, C_NONE, 15, 4, 0, 0, 0},
@@ -433,6 +434,7 @@ var optab = []Optab{
 	{AB, C_NONE, C_NONE, C_NONE, C_ZOREG, C_NONE, 6, 4, 0, 0, 0},
 	{ABL, C_NONE, C_NONE, C_NONE, C_ZREG, C_NONE, 6, 4, 0, 0, 0},
 	{ABL, C_NONE, C_NONE, C_NONE, C_ZOREG, C_NONE, 6, 4, 0, 0, 0},
+	// {ABL, C_NONE, C_NONE, C_NONE, C_TLS_GD, C_NONE, 111, 4, 0, 0, 0},
 	{obj.ARET, C_NONE, C_NONE, C_NONE, C_ZREG, C_NONE, 6, 4, 0, 0, 0},
 	{obj.ARET, C_NONE, C_NONE, C_NONE, C_ZOREG, C_NONE, 6, 4, 0, 0, 0},
 	{ABEQ, C_NONE, C_NONE, C_NONE, C_SBRA, C_NONE, 7, 4, 0, BRANCH19BITS, 0},
@@ -441,6 +443,7 @@ var optab = []Optab{
 	{AERET, C_NONE, C_NONE, C_NONE, C_NONE, C_NONE, 41, 4, 0, 0, 0},
 
 	// get a PC-relative address
+	{AADRP, C_TLS_GD, C_NONE, C_NONE, C_ZREG, C_NONE, 109, 4, 0, 0, 0}, // adrp C_TLS_GD   // C_VCONADDR
 	{AADRP, C_SBRA, C_NONE, C_NONE, C_ZREG, C_NONE, 60, 4, 0, 0, 0},
 	{AADR, C_SBRA, C_NONE, C_NONE, C_ZREG, C_NONE, 61, 4, 0, 0, 0},
 
@@ -477,6 +480,7 @@ var optab = []Optab{
 	{AMOVD, C_GOTADDR, C_NONE, C_NONE, C_ZREG, C_NONE, 71, 8, 0, 0, 0},
 	{AMOVD, C_TLS_LE, C_NONE, C_NONE, C_ZREG, C_NONE, 69, 4, 0, 0, 0},
 	{AMOVD, C_TLS_IE, C_NONE, C_NONE, C_ZREG, C_NONE, 70, 8, 0, 0, 0},
+	{AMOVD, C_TLS_GD, C_NONE, C_NONE, C_ZREG, C_NONE, 108, 12, 0, 0, 0}, // gd加 , 输出asm时还没发法输出地址 // C_TLS_GD // C_VCONADDR
 
 	{AFMOVS, C_FREG, C_NONE, C_NONE, C_ADDR, C_NONE, 64, 12, 0, 0, 0},
 	{AFMOVS, C_ADDR, C_NONE, C_NONE, C_FREG, C_NONE, 65, 12, 0, 0, 0},
@@ -2054,9 +2058,15 @@ func (c *ctxt7) aclass(a *obj.Addr) int {
 			}
 			c.instoffset = a.Offset
 			if a.Sym != nil { // use relocation
-				if a.Sym.Type == objabi.STLSBSS {
+				if a.Sym.Type == objabi.STLSBSS { // 线程局部变量，未初始化变量
+					fmt.Printf("\t\t check Flag_shared \n") // go语言内的静态变量
 					if c.ctxt.Flag_shared {
-						return C_TLS_IE
+						// return C_TLS_IE // TODO: 通过flag来决定
+						fmt.Printf("\t\t instoffset %s  %s  %s \n", c.instoffset, a.Offset, a.Sym.Name) // 符号取地址模式暂未支持，依赖reloc来重新处理地址
+						// if a.Sym.Name == "runtime.tls_g2" {
+						// 	return C_TLS_IE
+						// }
+						return C_TLS_GD
 					} else {
 						return C_TLS_LE
 					}
@@ -2177,6 +2187,7 @@ func (c *ctxt7) aclass(a *obj.Addr) int {
 				c.ctxt.Diag("taking address of TLS variable is not supported")
 			}
 			c.instoffset = a.Offset
+			// fmt.Printf("\t\t instoffset %s  %s  %s %s \n", c.instoffset, a.Name, a.Sym.Name, a.Sym.R) // 符号取地址模式暂未支持，依赖reloc来重新处理地址
 			return C_VCONADDR
 
 		case obj.NAME_AUTO:
@@ -2313,15 +2324,29 @@ func (c *ctxt7) oplook(p *obj.Prog) *Optab {
 	c3 := &xcmp[a3]
 	c4 := &xcmp[a4]
 	c5 := &xcmp[a5]
+	v1 := false
+	v2 := false
+	v3 := false
+	v4 := false
+	v5 := false
+	v6 := false
+
 	for i := range ops {
 		op := &ops[i]
+		v1 = c1[op.a1]
+		v2 = c2[op.a2]
+		v3 = c3[op.a3]
+		v4 = c4[op.a4]
+		v5 = c5[op.a5]
+		v6 = p.Scond == op.scond
 		if c1[op.a1] && c2[op.a2] && c3[op.a3] && c4[op.a4] && c5[op.a5] && p.Scond == op.scond {
 			p.Optab = uint16(cap(optab) - cap(ops) + i + 1)
 			return op
 		}
 	}
 
-	c.ctxt.Diag("illegal combination: %v %v %v %v %v %v, %d %d", p, DRconv(a1), DRconv(a2), DRconv(a3), DRconv(a4), DRconv(a5), p.From.Type, p.To.Type)
+	c.ctxt.Diag("illegal combination: %v %v %v %v %v %v, %d %d  - %s %s %s %s %s %s", p, DRconv(a1), DRconv(a2), DRconv(a3), DRconv(a4), DRconv(a5), p.From.Type, p.To.Type,
+		v1, v2, v3, v4, v5, v6)
 	// Turn illegal instruction into an UNDEF, avoid crashing in asmout
 	return &Optab{obj.AUNDEF, C_NONE, C_NONE, C_NONE, C_NONE, C_NONE, 90, 4, 0, 0, 0}
 }
@@ -3517,6 +3542,28 @@ func (c *ctxt7) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		}
 		v := c.regoff(&p.From)
 		o1 = c.oaddi(p, p.As, v, rt, r)
+	case 110: /* add/sub $(uimm12|uimm24)[,R],R; cmp $(uimm12|uimm24),R */
+		// o1 = c.opirr(p, AADD) | uint32(p.To.Reg&31)<<5 | uint32(p.To.Reg&31)1|0|0|1|0|0|0|1|shift:2|imm12:12|Rn:5|Rd:5
+
+		// var pc = int64(0x0009B2A0)
+		// if p.To.Reg == 2 {
+		// 	pc = 0x000000000009B2E0
+		// }
+		// var pagebaseDiff int64 = signExtend(int64(((0x1016C8&0xFFFFFFFFFFFFF000)-(uint64(pc)&0xFFFFFFFFFFFFF000))>>12), 64)
+		// var pageBase int64 = pc + pagebaseDiff<<12
+		var offset = 0 // (0x1016C8 - pageBase) & 0xFFF // 64位要/8? 只是预留单位(数字大小)
+
+		o1 = uint32((0x244 << 22) | uint32(offset)<<10 | uint32(0&31)<<5 | uint32(0&31)) // 1|0|0|1|0|0|0|1|shift:2|imm12:12|Rn:5|Rd:5
+
+		rel := obj.Addrel(c.cursym)
+		rel.Off = int32(c.pc)
+		rel.Siz = 4
+		rel.Sym = p.From.Sym
+		rel.Add = 0                      // p.From.Offset
+		rel.Type = objabi.R_ARM64_TLS_GD // _PAGEOFF12 // C_TLS_GD
+		if p.From.Offset != 0 {
+			c.ctxt.Diag("invalid offset on MOVW $tlsvar")
+		}
 
 	case 3: /* op R<<n[,R],R (shifted register) */
 		o1 = c.oprrr(p, p.As)
@@ -3585,6 +3632,15 @@ func (c *ctxt7) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		rel.Sym = p.To.Sym
 		rel.Add = p.To.Offset
 		rel.Type = objabi.R_CALLARM64
+	// case 111: /* b s; blr s */
+	// 	o1 = c.opbrr(p, p.As)
+	// 	o1 |= uint32(REG_R1) << 5 // p.To.Reg&31
+	// 	if p.As == obj.ACALL {
+	// 		rel := obj.Addrel(c.cursym)
+	// 		rel.Off = int32(c.pc)
+	// 		rel.Siz = 0
+	// 		rel.Type = objabi.R_ARM64_TLS_GD_CALL
+	// 	}
 
 	case 6: /* b ,O(R); bl ,O(R) */
 		o1 = c.opbrr(p, p.As)
@@ -4599,12 +4655,49 @@ func (c *ctxt7) asmout(p *obj.Prog, o *Optab, out []uint32) {
 	case 60: /* adrp label,r */
 		d := c.brdist(p, 12, 21, 0)
 
-		o1 = ADR(1, uint32(d), uint32(p.To.Reg))
+		o1 = ADR(1, int64(d), uint32(p.To.Reg))
+	case 109: // 支持adrp gd-label, r 的plan9汇编转译
+		// d := c.brdist(p, 12, 21, 0)  uint32(d)
+		// 32 位 uint32(math.Abs(float64(0x7ffff00&0x1016C8-0x7ffff00&0x0009B2D8)))>>12
+		// c.pc 当前指令地址、 p.From.Target().Pc 符号地址
+		var q *obj.Prog
+		if p.To.Type == obj.TYPE_BRANCH {
+			q = p.To.Target()
+		} else if p.From.Type == obj.TYPE_BRANCH { // adr, adrp
+			q = p.From.Target()
+		}
+		if q == nil {
+			// TODO: don't use brdist for this case, as it isn't a branch.
+			// (Calls from omovlit, and maybe adr/adrp opcodes as well.)
+			q = p.Pool
+		}
+
+		fmt.Printf("adrp gd-label:\t\t  symbol addr %s \n cur instruction pc%s \n  %s \n %s \n %s \n", q, c.pc, c.instoffset, p.To, p.From)
+
+		// 以下是64位
+		// var pc uint64 = 0x000000000009B2A0
+		// if p.To.Reg == 2 {
+		// 	pc = 0x0009B2E0
+		// }
+		// signExtend(int64(((0x1016C8&0xFFFFFFFFFFFFF000)-(uint64(pc)&0xFFFFFFFFFFFFF000))>>12), 64)
+
+		o1 = ADR(1, 0, 0) // uint32(p.To.Reg)) // 需要符号
+		o2 = c.olsr12u(p, c.opldr(p, AMOVD), 0, REG_R0, REG_R1)
+		// o1 = uint32(0x20FBFFB0 |   (0X0 & ) << 5 |   uint32(p.To.Reg&31) ) // 为 0x20FBFFB0 为  ADRP    X0, #0x0  1|immlo:2|1|0|0|0|0|immhi:19|Rd:5
+		rel := obj.Addrel(c.cursym)
+		rel.Off = int32(c.pc)
+		rel.Siz = 8
+		rel.Sym = p.From.Sym
+		rel.Add = 0                      // p.From.Offset
+		rel.Type = objabi.R_ARM64_TLS_GD // _PAGE21 // C_TLS_GD
+		if p.From.Offset != 0 {
+			c.ctxt.Diag("invalid offset on MOVW $tlsvar")
+		}
 
 	case 61: /* adr label, r */
 		d := c.brdist(p, 0, 21, 0)
 
-		o1 = ADR(0, uint32(d), uint32(p.To.Reg))
+		o1 = ADR(0, int64(d), uint32(p.To.Reg))
 
 	case 62: /* op $movcon, [R], R -> mov $movcon, REGTMP + op REGTMP, [R], R */
 		if p.Reg == REGTMP {
@@ -4738,10 +4831,14 @@ func (c *ctxt7) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		if p.From.Offset != 0 {
 			c.ctxt.Diag("invalid offset on MOVW $tlsvar")
 		}
-
+	// 此处是对s代码的转译，转成o中间文件过程，翻译对应.s语句到字节码
 	case 70: /* IE model movd $tlsvar, reg -> adrp REGTMP, 0; ldr reg, [REGTMP, #0] + relocs */
-		o1 = ADR(1, 0, REGTMP)
-		o2 = c.olsr12u(p, c.opldr(p, AMOVD), 0, REGTMP, p.To.Reg)
+		// NOTE：1是代指op位，指令变为adrp，0是adr指令。立即数（有符号32位）高位放置5-24，有符号低位放置29-30（两位）
+		// ADRP是一个PC-relative的取址指令，根据相对当前指令与符号之间页基地址的差值进行寻址
+		o1 = ADR(1, 0, REGTMP)                                    // NOTE: arm64至多31个寄存器 // ADRP可以查找[pc - 4GB, pc + 4GB)之间的地址, pc当前指令地址, ADRP的P是页的意思 // 相对指令地址+偏移读取到寄存器： ADR指令 offset的单位是Byte，可以查找[pc - 1MB, pc + 4MB)之间的地址(base + imm)
+		o2 = c.olsr12u(p, c.opldr(p, AMOVD), 0, REGTMP, p.To.Reg) // opldr生成加载指令码，该指令可以加载指定的立即数到寄存器
+		// fmt.Printf("o2o2o2o2o2-xxx: %s", o1)
+		// fmt.Printf("o2o2o2o2o2: %s", o2)
 		rel := obj.Addrel(c.cursym)
 		rel.Off = int32(c.pc)
 		rel.Siz = 8
@@ -4751,6 +4848,52 @@ func (c *ctxt7) asmout(p *obj.Prog, o *Optab, out []uint32) {
 		if p.From.Offset != 0 {
 			c.ctxt.Diag("invalid offset on MOVW $tlsvar")
 		}
+	// NOTE: 指令与寻址数据不会超过4字节、寻址可以多次寻址组合而来
+	case 108: /* ldr GD model movd $tlsvar, reg -> adrp REGTMP, 0; ldr reg, [REGTMP, #0] + relocs */ // REGTMP 依赖库链接。将tlsvar变量进行移动， 是否有特殊之处需要处理？
+		// ~取补码 0x1U代表无符号
+		// data.rel.ro表示程序初始化时的只读数据段，从页变化告知重定位量？此处都32位指令编号
+
+		// o1 = ADR(1, 0, REGTMP) // 32位指令，连着对符号进行操作?
+		// 0xFFF 低12位
+
+		// o1 = c.olsr12u(p, c.opldr(p, AMOVD), REGTMP, (p.To.Reg)&31, REG_R1)
+
+		// o3 = c.oaddi12(p, atomicLDADD[], 0, REGTMP, REGTMP)
+		// o4 = c.opbrr(p, ABL)
+		// o4 |= uint32(REGTMP&31) << 5
+
+		// var pc = int64(0x0009B2A0)
+		// if p.To.Reg == 2 {
+		// 	pc = 0x000000000009B2E0
+		// }
+		// var pagebaseDiff int64 = signExtend(int64(((0x1016C8&0xFFFFFFFFFFFFF000)-(uint64(pc)&0xFFFFFFFFFFFFF000))>>12), 64)
+		// var pageBase int64 = pc + pagebaseDiff<<12
+		var offset = 0 // (0x1016C8 - pageBase) & 0xFFF // 64位要/8? 只是预留单位(数字大小)
+
+		// 取低12位偏移值（意思为相对于页基地址），64位要/8? 只是预留单位
+		// o1 = uint32(uint32(0x3f5<<22) | uint32((offset)<<10) | uint32((0&31)<<5) | REG_R0) // 11:2|1|1|1|0|0|1|0|1|imm12:12|Rn:5|Rt:5
+		o1 = ADR(1, 0, REG_R0)
+		o2 = c.olsr12u(p, c.opldr(p, AMOVD), 0, REG_R0, p.To.Reg)
+		o3 = uint32((0x244 << 22) | uint32(offset)<<10 | uint32(REG_R0&31)<<5 | uint32(REG_R0&31))
+		// 	o1 = c.opbrr(p, p.As)
+		// 	o1 |= uint32(REG_R1) << 5 // p.To.Reg&31
+
+		rel := obj.Addrel(c.cursym)
+		rel.Off = int32(c.pc)
+		rel.Siz = 8
+		rel.Sym = p.From.Sym
+		rel.Add = 0                      // p.From.Offset
+		rel.Type = objabi.R_ARM64_TLS_GD // _PAGEOFF12 // C_TLS_GD
+		if p.From.Offset != 0 {
+			c.ctxt.Diag("invalid offset on MOVW $tlsvar")
+		}
+
+		rel2 := obj.Addrel(c.cursym)
+		rel2.Off = int32(c.pc + 8)
+		rel2.Siz = 4
+		rel2.Sym = p.From.Sym
+		rel2.Add = 0
+		rel2.Type = objabi.R_ARM64_TLS_GD_PAGEOFF12
 
 	case 71: /* movd sym@GOT, reg -> adrp REGTMP, #0; ldr reg, [REGTMP, #0] + relocs */
 		o1 = ADR(1, 0, REGTMP)
@@ -6966,7 +7109,7 @@ func (c *ctxt7) brdist(p *obj.Prog, preshift int, flen int, shift int) int64 {
 		}
 	}
 
-	return v & ((t << 1) - 1)
+	return v & ((t << 1) - 1) // 格式化限长
 }
 
 /*
@@ -7194,7 +7337,7 @@ func (c *ctxt7) opstore(p *obj.Prog, a obj.As) uint32 {
 }
 
 /*
- * load/store register (scaled 12-bit unsigned immediate) C3.3.13
+ * load/store register (scaled 12-bit unsigned immediate) C3.3.13 # 12位无符号偏移量
  *	these produce 64-bit values (when there's an option)
  */
 func (c *ctxt7) olsr12u(p *obj.Prog, o uint32, v int32, rn, rt int16) uint32 {
@@ -7245,7 +7388,7 @@ func (c *ctxt7) opstr(p *obj.Prog, a obj.As) uint32 {
 func (c *ctxt7) opldr(p *obj.Prog, a obj.As) uint32 {
 	switch a {
 	case AMOVD:
-		return LDSTR(3, 0, 1) /* simm9<<12 | Rn<<5 | Rt */
+		return LDSTR(3, 0, 1) /* simm9<<12 | Rn<<5 | Rt */ // NOTE: 9位有符号立即数左移12位（op-code生成操作码，指定的两个寄存器） rn与rt寄存器编号
 
 	case AMOVW:
 		return LDSTR(2, 0, 2)
@@ -7344,6 +7487,22 @@ func (c *ctxt7) opstrr(p *obj.Prog, a obj.As, extension bool) uint32 {
 	}
 	c.ctxt.Diag("bad opstrr %v\n%v", a, p)
 	return 0
+}
+
+func (c *ctxt7) oadds(p *obj.Prog, a obj.As, rd, rn, rm int16) uint32 {
+	op := c.opirr(p, a)
+
+	// if (v & 0xFFF000) != 0 {
+	// 	if v&0xFFF != 0 {
+	// 		c.ctxt.Diag("%v misuses oaddi", p)
+	// 	}
+	// 	v >>= 12
+	// 	op |= 1 << 22
+	// }
+
+	op |= (uint32(rm&31) << 16) | (uint32(rn&31) << 5) | uint32(rd&31)
+
+	return op
 }
 
 func (c *ctxt7) oaddi(p *obj.Prog, a obj.As, v int32, rd, rn int16) uint32 {
@@ -7884,4 +8043,9 @@ func (c *ctxt7) encRegShiftOrExt(p *obj.Prog, a *obj.Addr, r int16) uint32 {
 // pack returns the encoding of the "Q" field and two arrangement specifiers.
 func pack(q uint32, arngA, arngB uint8) uint32 {
 	return uint32(q)<<16 | uint32(arngA)<<8 | uint32(arngB)
+}
+
+// signExtend sign extends val starting at bit bit.
+func signExtend(val int64, bit uint) int64 {
+	return val << (64 - bit) >> (64 - bit)
 }

@@ -154,6 +154,7 @@ func isPLTCall(arch *sys.Arch, rt objabi.RelocType) bool {
 	// ARM64
 	case uint32(sys.ARM64) | uint32(objabi.ElfRelocOffset+objabi.RelocType(elf.R_AARCH64_CALL26))<<8,
 		uint32(sys.ARM64) | uint32(objabi.ElfRelocOffset+objabi.RelocType(elf.R_AARCH64_JUMP26))<<8,
+		uint32(sys.ARM64) | uint32(objabi.ElfRelocOffset+objabi.RelocType(elf.R_AARCH64_TLSDESC_CALL))<<8,
 		uint32(sys.ARM64) | uint32(objabi.MachoRelocOffset+MACHO_ARM64_RELOC_BRANCH26*2+pcrel)<<8:
 		return true
 
@@ -200,7 +201,7 @@ func FoldSubSymbolOffset(ldr *loader.Loader, s loader.Sym) (loader.Sym, int64) {
 //
 // This is a performance-critical function for the linker; be careful
 // to avoid introducing unnecessary allocations in the main loop.
-func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
+func (st *relocSymState) relocsym(s loader.Sym, P []byte, addr int64, out *OutBuf) {
 	ldr := st.ldr
 	relocs := ldr.Relocs(s)
 	if relocs.Count() == 0 {
@@ -239,7 +240,7 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 			if target.IsShared() || target.IsPlugin() {
 				if ldr.SymName(rs) == "main.main" || (!target.IsPlugin() && ldr.SymName(rs) == "main..inittask") {
 					sb := ldr.MakeSymbolUpdater(rs)
-					sb.SetType(sym.SDYNIMPORT)
+					sb.SetType(sym.SDYNIMPORT) // got rel
 				} else if strings.HasPrefix(ldr.SymName(rs), "go:info.") {
 					// Skip go.info symbols. They are only needed to communicate
 					// DWARF info between the compiler and linker.
@@ -301,6 +302,23 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 			case 8:
 				o = int64(target.Arch.ByteOrder.Uint64(P[off:]))
 			}
+			// if "_cgoexp_09a847c05716_Hello" == ldr.SymName(rs) {
+			// fmt.Printf("%s\n", ldr.SymName(rs))
+			// }
+			if "runtime.tls_g" == ldr.SymName(rs) {
+
+				var ox int64 = 0
+				if ldr.SymSect(s).Name == ".text" {
+					ox = ldr.SymValue(rs) - int64(Segtext.Sections[0].Vaddr) + r.Add()
+				} else {
+					ox = ldr.SymValue(rs) - int64(ldr.SymSect(rs).Vaddr) + r.Add()
+				}
+
+				fmt.Printf("\t\t Buffer Offset: %s", out.Offset())
+				fmt.Printf("\t\t Archreloc addr: %s SymValue: %s , \n byteOrder off: %s, name: %s \n SymSect: %s SymSect(s).Vaddr: %s \n %s \n", addr, ldr.SymValue(rs)+r.Add(), off, ldr.SymName(rs),
+					ldr.SymSect(s).Name, ldr.SymSect(s).Vaddr, ox)
+			}
+			// int64(len(P))
 			out, n, ok := thearch.Archreloc(target, ldr, syms, r, s, o)
 			if target.IsExternal() {
 				nExtReloc += n
@@ -336,6 +354,7 @@ func (st *relocSymState) relocsym(s loader.Sym, P []byte) {
 			} else {
 				log.Fatalf("unexpected R_TLS_LE relocation for %v", target.HeadType)
 			}
+		// TODO: check
 		case objabi.R_TLS_IE:
 			if target.IsExternal() && target.IsElf() {
 				nExtReloc++
@@ -648,7 +667,7 @@ func extreloc(ctxt *Link, ldr *loader.Loader, s loader.Sym, r loader.Reloc) (loa
 	default:
 		return thearch.Extreloc(target, ldr, r, s)
 
-	case objabi.R_TLS_LE, objabi.R_TLS_IE:
+	case objabi.R_TLS_LE, objabi.R_TLS_IE: // TODO: check , objabi.R_ARM64_TLS_GD:
 		if target.IsElf() {
 			rs := r.Sym()
 			rr.Xsym = rs
@@ -1095,7 +1114,34 @@ func writeBlock(ctxt *Link, out *OutBuf, ldr *loader.Loader, syms []loader.Sym, 
 			addr = val
 		}
 		P := out.WriteSym(ldr, s)
-		st.relocsym(s, P)
+
+		// bLen, _ := out.writeLoc(0)
+		relocs := ldr.Relocs(s)
+		for ri := 0; ri < relocs.Count(); ri++ {
+			if relocs.Count() > 0 && ldr.SymName(relocs.At(ri).Sym()) == "runtime.tls_g" {
+				siz := int32(relocs.At(ri).Siz())
+				off := relocs.At(ri).Off()
+				var o int64 = 0
+				switch siz {
+				default:
+					// st.err.Errorf(s, "bad reloc size %#x for %s", uint32(siz), ldr.SymName(rs))
+				case 1:
+					o = int64(P[off])
+				case 2:
+					o = int64(st.target.Arch.ByteOrder.Uint16(P[off:]))
+				case 4:
+					o = int64(st.target.Arch.ByteOrder.Uint32(P[off:]))
+				case 8:
+					o = int64(st.target.Arch.ByteOrder.Uint64(P[off:]))
+				}
+				if o != 0 {
+					fmt.Printf("\t\t runtime.tls_g buffer: %s , %x\n", ldr.SymName(relocs.At(ri).Sym()), int64(o))
+				}
+
+			}
+		}
+		st.relocsym(s, P, addr, out)
+
 		if ldr.IsGeneratedSym(s) {
 			f := ctxt.generatorSyms[s]
 			f(ctxt, s)
@@ -3124,7 +3170,7 @@ func compressSyms(ctxt *Link, syms []loader.Sym) []byte {
 		if relocs.Count() != 0 {
 			relocbuf = append(relocbuf[:0], P...)
 			P = relocbuf
-			st.relocsym(s, P)
+			st.relocsym(s, P, 0, nil)
 		}
 		if _, err := z.Write(P); err != nil {
 			log.Fatalf("compression failed: %s", err)

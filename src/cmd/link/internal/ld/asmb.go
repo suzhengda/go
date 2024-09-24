@@ -39,6 +39,8 @@ func asmb(ctxt *Link) {
 	}
 
 	for _, sect := range Segtext.Sections {
+
+		fmt.Printf("Segtext.Sections:%x,%x,%x,%x,%x", sect.Vaddr, Segtext.Vaddr, Segtext.Fileoff) // , Segment.Vaddr, Segment.Fileoff
 		offset := sect.Vaddr - Segtext.Vaddr + Segtext.Fileoff
 		// Handle text sections with Codeblk
 		if sect.Name == ".text" {

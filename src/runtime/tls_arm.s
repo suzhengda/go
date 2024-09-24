@@ -35,9 +35,9 @@ TEXT runtime·save_g(SB),NOSPLIT,$0
 	// The replacement function saves LR in R11 over the call to read_tls_fallback.
 	// To make stack unwinding work, this function should NOT be marked as NOFRAME,
 	// as it may contain a call, which clobbers LR even just temporarily.
-	MRC	15, 0, R0, C13, C0, 3 // fetch TLS base pointer
+	MRC	15, 0, R0, C13, C0, 3 // fetch TLS base pointer // NOTE: 线程内存基准指针
 	BIC $3, R0 // Darwin/ARM might return unaligned pointer
-	MOVW	runtime·tls_g(SB), R11
+	MOVW	runtime·tls_g(SB), R11  // TODO: armv7 GD模式读取。线程信息结构的相关so模块偏移
 	ADD	R11, R0
 	MOVW	g, 0(R0)
 	MOVW	g, R0 // preserve R0 across call to setg<>
@@ -50,7 +50,7 @@ TEXT runtime·load_g(SB),NOSPLIT,$0
 	// See save_g
 	MRC	15, 0, R0, C13, C0, 3 // fetch TLS base pointer
 	BIC $3, R0 // Darwin/ARM might return unaligned pointer
-	MOVW	runtime·tls_g(SB), R11
+	MOVW	runtime·tls_g(SB), R11 // TODO: armv7 GD模式
 	ADD	R11, R0
 	MOVW	0(R0), g
 	RET
@@ -73,7 +73,7 @@ TEXT runtime·_initcgo(SB),NOSPLIT,$4
 	MRC     15, 0, R0, C13, C0, 3 	// load TLS base pointer
 	MOVW 	R0, R3 			// arg 3: TLS base pointer
 #ifdef TLSG_IS_VARIABLE
-	MOVW 	$runtime·tls_g(SB), R2 	// arg 2: &tls_g
+	MOVW 	$runtime·tls_g(SB), R2 	// arg 2: &tls_g // TODO: armv7 GD模式
 #else
 	MOVW	$0, R2			// arg 2: not used when using platform tls
 #endif
@@ -92,9 +92,9 @@ TEXT setg_gcc<>(SB),NOSPLIT,$0
 #ifdef GOOS_android
 // Use the free TLS_SLOT_APP slot #2 on Android Q.
 // Earlier androids are set up in gcc_android.c.
-DATA runtime·tls_g+0(SB)/4, $8
+DATA runtime·tls_g+0(SB)/4, $8 // TODO: armv7 GD模式
 #endif
-GLOBL runtime·tls_g+0(SB), NOPTR, $4
+GLOBL runtime·tls_g+0(SB), NOPTR, $4 // TODO: armv7 GD模式
 #else
-GLOBL runtime·tls_g+0(SB), TLSBSS, $4
+GLOBL runtime·tls_g+0(SB), TLSBSS, $4 // TODO: armv7 GD模式
 #endif

@@ -382,11 +382,11 @@ const HashSize = 16 // truncated SHA256
 // Serialized format:
 //
 //	Reloc struct {
-//	   Off  int32
+//	   Off  int32	// Off对基址偏移量
 //	   Siz  uint8
 //	   Type uint16
-//	   Add  int64
-//	   Sym  SymRef
+//	   Add  int64  // Add为修正量？（符号的？）
+//	   Sym  SymRef	// 符号引用
 //	}
 type Reloc [RelocSize]byte
 

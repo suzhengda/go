@@ -998,7 +998,7 @@ var instFormats = [...]instFormat{
 	// ADR <Xd>, <label>
 	{0x9f000000, 0x10000000, ADR, instArgs{arg_Xd, arg_slabel_immhi_immlo_0}, nil},
 	// ADRP <Xd>, <label>
-	{0x9f000000, 0x90000000, ADRP, instArgs{arg_Xd, arg_slabel_immhi_immlo_12}, nil},
+	{0x9f000000, 0x90000000, ADRP, instArgs{arg_Xd, arg_slabel_immhi_immlo_12}, nil}, // rel
 	// AND <Wd|WSP>, <Wn>, #<imm>
 	{0xffc00000, 0x12000000, AND, instArgs{arg_Wds, arg_Wn, arg_immediate_bitmask_32_imms_immr}, nil},
 	// AND <Xd|SP>, <Xn>, #<imm>

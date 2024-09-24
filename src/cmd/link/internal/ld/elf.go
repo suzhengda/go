@@ -1281,7 +1281,7 @@ func elfshreloc(arch *sys.Arch, sect *sym.Section) *ElfShdr {
 func elfrelocsect(ctxt *Link, out *OutBuf, sect *sym.Section, syms []loader.Sym) {
 	// If main section is SHT_NOBITS, nothing to relocate.
 	// Also nothing to relocate in .shstrtab.
-	if sect.Vaddr >= sect.Seg.Vaddr+sect.Seg.Filelen {
+	if sect.Vaddr >= sect.Seg.Vaddr+sect.Seg.Filelen { // using sect filelen
 		return
 	}
 	if sect.Name == ".shstrtab" {
@@ -1307,6 +1307,9 @@ func elfrelocsect(ctxt *Link, out *OutBuf, sect *sym.Section, syms []loader.Sym)
 		if ldr.SymValue(s) >= int64(eaddr) {
 			break
 		}
+		// if ldr.SymName(s) != "?" {
+		// 	fmt.Printf("elfrelocsect:%s\n", ldr.SymName(s))
+		// }
 
 		// Compute external relocations on the go, and pass to
 		// ELF.Reloc1 to stream out.

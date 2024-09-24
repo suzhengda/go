@@ -844,7 +844,7 @@ func (ctxt *Link) linksetup() {
 		// runtime.tlsg is used for external linking on platforms that do not define
 		// a variable to hold g in assembly (currently only intel).
 		if sb.Type() == 0 {
-			sb.SetType(sym.STLSBSS)
+			sb.SetType(sym.STLSBSS) // TODO: check STLSBSS
 			sb.SetSize(int64(ctxt.Arch.PtrSize))
 		} else if sb.Type() != sym.SDYNIMPORT {
 			Errorf(nil, "runtime declared tlsg variable %v", sb.Type())

@@ -22,7 +22,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT|TOPFRAME,$0
 	MRS_TPIDR_R0
 	AND	$~7, R0
 	MOVD	R0, 16(RSP)             // arg2: TLS base
-	MOVD	$runtime·tls_g(SB), R2
+	MOVD	$runtime·tls_g(SB), R2  // TODO
 	MOVD	R2, 8(RSP)              // arg1: &tlsg
 	BL	·tlsinit(SB)
 	ADD	$32, RSP
@@ -45,7 +45,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT|TOPFRAME,$0
 #ifdef GOOS_android
 	MRS_TPIDR_R0			// load TLS base pointer
 	MOVD	R0, R3			// arg 3: TLS base pointer
-	MOVD	$runtime·tls_g(SB), R2 	// arg 2: &tls_g
+	MOVD	$runtime·tls_g(SB), R2 	// arg 2: &tls_g  // TODO
 #else
 	MOVD	$0, R2		        // arg 2: not used when using platform's TLS
 #endif
@@ -979,6 +979,7 @@ TEXT ·asmcgocall(SB),NOSPLIT,$0-20
 
 	// Switch to system stack.
 	MOVD	R0, R9	// gosave_systemstack_switch<> and save_g might clobber R0
+  MOVD	R1, R10	// gosave_systemstack_switch<> and save_g might clobber R1  // 作者可能比较了解该调用，否则仅仅对R0作了保存，一般函数会内部作保存与恢复
 	BL	gosave_systemstack_switch<>(SB)
 	MOVD	R3, g
 	BL	runtime·save_g(SB)
@@ -986,6 +987,7 @@ TEXT ·asmcgocall(SB),NOSPLIT,$0-20
 	MOVD	R0, RSP
 	MOVD	(g_sched+gobuf_bp)(g), R29
 	MOVD	R9, R0
+  MOVD	R10, R1
 
 	// Now on a scheduling stack (a pthread-created stack).
 	// Save room for two of our pointers /*, plus 32 bytes of callee

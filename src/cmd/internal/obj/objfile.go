@@ -173,7 +173,7 @@ func WriteObjFile(ctxt *Link, b *bio.Writer) {
 	}
 	w.Uint32(uint32(dataOff))
 
-	// Relocs
+	// Relocs  // 根据符号重写指令关联的符号索引？
 	h.Offsets[goobj.BlkReloc] = w.Offset()
 	for _, list := range lists {
 		for _, s := range list {

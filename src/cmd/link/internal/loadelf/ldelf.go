@@ -722,7 +722,7 @@ func Load(l *loader.Loader, arch *sys.Arch, localSymVersion int, f *bio.Reader, 
 
 			if is64 != 0 {
 				// 64-bit rel/rela
-				rOff = int32(e.Uint64(p))
+				rOff = int32(e.Uint64(p)) //
 
 				p = p[8:]
 				switch arch.Family {
@@ -802,7 +802,7 @@ func Load(l *loader.Loader, arch *sys.Arch, localSymVersion int, f *bio.Reader, 
 				rAdd = int64(int32(rAdd))
 			}
 
-			r, _ := sb.AddRel(rType)
+			r, _ := sb.AddRel(rType) // key point!
 			r.SetOff(rOff)
 			r.SetSiz(rSize)
 			r.SetSym(rSym)
@@ -1066,6 +1066,7 @@ func relSize(arch *sys.Arch, pn string, elftype uint32) (uint8, uint8, error) {
 		ARM | uint32(elf.R_ARM_PC24)<<16,
 		ARM | uint32(elf.R_ARM_JUMP24)<<16,
 		ARM64 | uint32(elf.R_AARCH64_CALL26)<<16,
+		ARM64 | uint32(elf.R_AARCH64_TLSDESC_CALL)<<16,
 		ARM64 | uint32(elf.R_AARCH64_ADR_GOT_PAGE)<<16,
 		ARM64 | uint32(elf.R_AARCH64_LD64_GOT_LO12_NC)<<16,
 		ARM64 | uint32(elf.R_AARCH64_ADR_PREL_PG_HI21)<<16,

@@ -258,7 +258,7 @@ func (sc *stackCheck) computeHeight(sym loader.Sym, graph bool) (int, []stackChe
 				break
 			}
 			t := r.Type()
-			if t.IsDirectCall() || t == objabi.R_CALLIND {
+			if t.IsDirectCall() || t == objabi.R_CALLIND { // TODO: check
 				growth := height + sc.callSize
 				var target loader.Sym
 				if t == objabi.R_CALLIND {

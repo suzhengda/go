@@ -191,7 +191,7 @@ type Loader struct {
 	extReader    *oReader // a dummy oReader, for external symbols
 	payloadBatch []extSymPayload
 	payloads     []*extSymPayload // contents of linker-materialized external syms
-	values       []int64          // symbol values, indexed by global sym index
+	values       []int64          // symbol values, indexed by global sym index // NOTE: 相对于所在节位置的偏移、不同的section域??（ABS 代表不该被重定位的符号，UNDEF代表未定义的符号，COMMON代表还未被分配位置的未初始化数据（如外部变量），其他数值表示符号的枚举，如1表示.text 汇编代码节， 2表示本地变量bss节, 3表示data节）
 
 	sects    []*sym.Section // sections
 	symSects []uint16       // symbol's section, index to sects array

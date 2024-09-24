@@ -1215,5 +1215,6 @@
 {"Name":"XTN, XTN2","Bits":"0|0|0|0|1|1|1|0|size:2|1|0|0|0|0|1|0|0|1|0|1|0|Rn:5|Rd:5","Arch":"Vector variant","Syntax":"XTN <Vd>.<Tb>, <Vn>.<Ta>","Code":"","Alias":""},
 {"Name":"XTN, XTN2","Bits":"0|1|0|0|1|1|1|0|size:2|1|0|0|0|0|1|0|0|1|0|1|0|Rn:5|Rd:5","Arch":"Vector variant","Syntax":"XTN2 <Vd>.<Tb>, <Vn>.<Ta>","Code":"","Alias":""},
 {"Name":"ZIP1","Bits":"0|Q|0|0|1|1|1|0|size:2|0|Rm:5|0|0|1|1|1|0|Rn:5|Rd:5","Arch":"Advanced SIMD variant","Syntax":"ZIP1 <Vd>.<T>, <Vn>.<T>, <Vm>.<T>","Code":"","Alias":""},
-{"Name":"ZIP2","Bits":"0|Q|0|0|1|1|1|0|size:2|0|Rm:5|0|1|1|1|1|0|Rn:5|Rd:5","Arch":"Advanced SIMD variant","Syntax":"ZIP2 <Vd>.<T>, <Vn>.<T>, <Vm>.<T>","Code":"","Alias":""}
+{"Name":"ZIP2","Bits":"0|Q|0|0|1|1|1|0|size:2|0|Rm:5|0|1|1|1|1|0|Rn:5|Rd:5","Arch":"Advanced SIMD variant","Syntax":"ZIP2 <Vd>.<T>, <Vn>.<T>, <Vm>.<T>","Code":"","Alias":""},
+{}
 ]

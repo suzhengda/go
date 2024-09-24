@@ -106,6 +106,7 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 
 	switch r.Type() {
 	default:
+		fmt.Printf("\t\t objabi.ElfRelocOffset adddynrel \n")
 		if r.Type() >= objabi.ElfRelocOffset {
 			ldr.Errorf(s, "unexpected relocation type %d (%s)", r.Type(), sym.RelocName(target.Arch, r.Type()))
 			return false
@@ -198,7 +199,6 @@ func adddynrel(target *ld.Target, ldr *loader.Loader, syms *ld.ArchSyms, s loade
 			su.SetRelocSym(rIdx, syms.PLT)
 			su.SetRelocAdd(rIdx, int64(braddoff(int32(r.Add()), ldr.SymPlt(targ)/4)))
 		}
-
 		return true
 	}
 
@@ -291,7 +291,7 @@ func elfreloc1(ctxt *ld.Link, out *ld.OutBuf, ldr *loader.Loader, s loader.Sym, 
 		}
 	case objabi.R_TLS_LE:
 		out.Write32(uint32(elf.R_ARM_TLS_LE32) | uint32(elfsym)<<8)
-	case objabi.R_TLS_IE:
+	case objabi.R_TLS_IE: // TODO: check
 		out.Write32(uint32(elf.R_ARM_TLS_IE32) | uint32(elfsym)<<8)
 	case objabi.R_GOTPCREL:
 		if siz == 4 {

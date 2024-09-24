@@ -34,6 +34,7 @@
 #define TP_ALIGN
 #endif
 
+// TODO: GD模式读取
 // Load g from TLS. (See tls_arm64.s)
 #define load_g \
 	MRS_TPIDR_R0 \
@@ -548,5 +549,5 @@ noswitch:
 
 #ifndef TLSG_IS_VARIABLE
 // tls_g, g value for each thread in TLS
-GLOBL runtime·tls_g+0(SB), TLSBSS+DUPOK, $8
+GLOBL runtime·tls_g+0(SB), TLSBSS+DUPOK, $8  // TODO: GD模式读取
 #endif
