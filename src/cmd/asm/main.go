@@ -88,6 +88,13 @@ func main() {
 		}
 	}
 
+	// tlsmodegd: 让 runtime 汇编按开关选择 TLS 访问方式。
+	// 默认(不带该参数)必须保持上游实现，避免把 runtime.tls_g(Android 上是常量偏移)
+	// 当函数调用；只有 musl 的 GD 模式才走 CALL 分支。
+	if *flags.Tlsmodegd {
+		flags.D = append(flags.D, "TLSMODE_GD")
+	}
+
 	var ok, diag bool
 	var failedFile string
 	for _, f := range flag.Args() {

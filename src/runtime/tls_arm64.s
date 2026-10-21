@@ -26,9 +26,16 @@ TEXT runtime·load_g(SB),NOSPLIT,$0
 #endif
 //	MOVD	runtime·tls_g(SB), R27
 //	MOVD	(R0)(R27), g
+// NOTE: 默认保持上游实现；只有 -tlsmodegd(musl GD 模式) 由 asm 定义 TLSMODE_GD，
+// 才走 CALL 分支（Android 上 tls_g 是常量偏移，不能当函数调用）。
+#ifdef TLSMODE_GD
   MOVD runtime·tls_g(SB), R1
   CALL  (R1)
   MOVD	(R27)(R0), g
+#else
+	MOVD	runtime·tls_g(SB), R27
+	MOVD	(R0)(R27), g
+#endif
 
 nocgo:
 	RET
@@ -51,9 +58,14 @@ TEXT runtime·save_g(SB),NOSPLIT,$0
 #endif
 //	MOVD	runtime·tls_g(SB), R27
 //	MOVD	(R0)(R27), g
+#ifdef TLSMODE_GD
   MOVD runtime·tls_g(SB), R1  // MOVD与adrp有关，封装了调用musl的函数（call时调用）获得模块线程静态变量地址的偏移
   CALL  (R1) // 此时X0相对于TPIDR_R0的偏移得到runtime·tls_g实际地址
   MOVD	g, (R27)(R0)
+#else
+	MOVD	runtime·tls_g(SB), R27
+	MOVD	g, (R0)(R27)
+#endif
 nocgo:
 	RET
 
